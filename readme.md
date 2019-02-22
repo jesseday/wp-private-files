@@ -4,7 +4,7 @@ Allow wordpress editors and administrator to mark files as private after uploadi
 
 ### Caveats
  
-* This relies on the [Advanced Custom Fields](https://wordpress.org/plugins/advanced-custom-fields/) plugin.  Install that first.
+* This relies on the [Advanced Custom Fields](https://wordpress.org/plugins/advanced-custom-fields/) plugin.
 * Currently, this also depends on there being a `/private/` directory within your uploads directory that is protected.  This plugin was developed
 for a site hosted on Pantheon, which provides this feature.  Read more [here](https://pantheon.io/docs/private-paths/).
 
