@@ -1,6 +1,6 @@
 <?php
 
-namespace FTRatings;
+namespace WP_Private_Files;
 
 class ManagedFile {
 

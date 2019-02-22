@@ -1,0 +1,13 @@
+{
+    "name": "jesseday/wp-private-files",
+    "description": "Allow wordpress editors to mark files as private",
+    "require": {
+        "upstatement/routes": "^0.4.0"
+    },
+    "authors": [
+        {
+            "name": "Jesse Day",
+            "email": "09jday@gmail.com"
+        }
+    ]
+}
