@@ -4,7 +4,7 @@ use WP_Private_Files\ManagedFile;
 
 function wp_private_files_routes() {
 	Routes::map( 'managed/files/[i:year]/[i:month]/[*:filename]', function ( $params ) {
-		Routes::load( FTRATINGS_PRIVATE_FILES_PLUGIN_PATH . '/src/templates/managed-file.php', [
+		Routes::load( WP_PRIVATE_FILES_PLUGIN_PATH . '/src/templates/managed-file.php', [
 			'file' => vsprintf( '%s/%s/%s', [
 				$params['year'],
 				$params['month'],
