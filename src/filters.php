@@ -27,11 +27,12 @@ add_filter( 'wp_calculate_image_srcset', 'wp_private_files_attachment_image_src_
  *
  * @return array
  */
-function wp_private_files_attachment_image_src_filter( $sources, $size_array, $image_src, $image_meta, $attachment_id  ) {
-	$sources = array_map(function($source) {
-		$source['url'] = ManagedFile::fromPath($source['url'])->managedUrl();
+function wp_private_files_attachment_image_src_filter( $sources, $size_array, $image_src, $image_meta, $attachment_id ) {
+	$sources = array_map( function ( $source ) {
+		$source['url'] = ManagedFile::fromPath( $source['url'] )->managedUrl();
+
 		return $source;
-	}, $sources);
+	}, $sources );
 
 	return $sources;
 }

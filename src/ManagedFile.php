@@ -4,311 +4,307 @@ namespace WP_Private_Files;
 
 class ManagedFile {
 
-	protected $post;
-	protected $path;
+    protected $post;
 
-	public function __construct( $post = null, $path = null ) {
-		$this->post = $post;
-		$this->path = $this->makeRelativePath( $path );
-	}
+    protected $path;
 
-	/*
-    |--------------------------------------------------------------------------
-    | Static Constructors
-    |--------------------------------------------------------------------------
-    */
+    public function __construct( $post = NULL, $path = NULL ) {
+        $this->post = $post;
+        $this->path = $this->makeRelativePath( $path );
+    }
 
-	public static function fromPostId( $post, $path = null ) {
-		$post = is_a( $post, 'WP_Post' ) ? $post : get_post( $post );
-		$path = $path ? : get_post_meta( $post->ID, '_wp_attached_file' )[0];
+    /*
+      |--------------------------------------------------------------------------
+      | Static Constructors
+      |--------------------------------------------------------------------------
+      */
 
-		return new static( $post, $path );
-	}
+    public static function fromPostId( $post, $path = NULL ) {
+        $post = is_a( $post, 'WP_Post' ) ? $post : get_post( $post );
+        $path = $path ?: get_post_meta( $post->ID, '_wp_attached_file' )[0];
 
-	/**
-	 * Static constructor creating a managed file from a given alias
-	 *
-	 * @param $alias
-	 *
-	 * @return static
-	 */
-	public static function fromPath( $path ) {
-		$file          = new static;
-		$relative_path = $file->makeRelativePath( $path );
-		$paths         = $file->normalizedFilePaths( $relative_path);
+        return new static( $post, $path );
+    }
 
-		$posts         = get_posts( [
-			'ignore_sticky_posts' => true,
-			'post_type'           => 'attachment',
-			'meta_query'          => [
-				[
-					'key'     => '_wp_attached_file',
-					'value'   => $paths,
-					'compare' => 'IN'
-				]
-			]
-		] );
+    /**
+     * Static constructor creating a managed file from a given alias
+     *
+     * @param $alias
+     *
+     * @return static
+     */
+    public static function fromPath( $path ) {
+        $file          = new static;
+        $relative_path = $file->makeRelativePath( $path );
+        $paths         = $file->normalizedFilePaths( $relative_path );
 
-		if ( ! is_array( $posts ) ) {
-			return $file->set( 'path', $relative_path );
-		}
+        $posts = get_posts( [
+            'ignore_sticky_posts' => TRUE,
+            'post_type' => 'attachment',
+            'meta_query' => [
+                [
+                    'key' => '_wp_attached_file',
+                    'value' => $paths,
+                    'compare' => 'IN',
+                ],
+            ],
+        ] );
 
-		if ( count( $posts ) === 1 ) {
-			return $file->set( 'post', reset( $posts ) )
-			            ->set( 'path', $relative_path );
-		}
+        if ( ! is_array( $posts ) ) {
+            return $file->set( 'path', $relative_path );
+        }
 
-		foreach ( $posts as $post ) {
-			$meta = wp_get_attachment_metadata( $post->ID );
-			if ( isset( $meta['file'] ) && $meta['file'] === $relative_path ) {
+        if ( count( $posts ) === 1 ) {
+            return $file->set( 'post', reset( $posts ) )
+                        ->set( 'path', $relative_path );
+        }
 
-				return $file->set( 'post', $post )
-				            ->set( 'path', $relative_path );
-			}
+        foreach ( $posts as $post ) {
+            $meta = wp_get_attachment_metadata( $post->ID );
+            if ( isset( $meta['file'] ) && $meta['file'] === $relative_path ) {
 
-			$cropped_paths = array_column( $meta['sizes'], 'file' );
-			$cropped_paths = array_map( function ( $filename ) use ( $relative_path ) {
-				return static::fileDir( $relative_path ) . '/' . $filename;
-			}, $cropped_paths );
-			if ( array_intersect( $cropped_paths, $paths ) ) {
-				return $file->set( 'post', $post )
-				            ->set( 'path', $relative_path );
-			}
-		}
+                return $file->set( 'post', $post )
+                            ->set( 'path', $relative_path );
+            }
 
-		return $file->set( 'post', reset( $posts ) )
-		            ->set( 'path', $relative_path );
-	}
+            $cropped_paths = array_column( $meta['sizes'], 'file' );
+            $cropped_paths = array_map( function ( $filename ) use ( $relative_path ) {
+                return static::fileDir( $relative_path ) . '/' . $filename;
+            }, $cropped_paths );
+            if ( array_intersect( $cropped_paths, $paths ) ) {
+                return $file->set( 'post', $post )
+                            ->set( 'path', $relative_path );
+            }
+        }
 
-	/**
-	 * Create an array of normalized file paths from a filename that may
-	 * include width and height dimensions.
-	 *
-	 * @param $filename
-	 *
-	 * @return array
-	 */
-	public function normalizedFilePaths( $filename ) {
-		$filename    = $this->makeRelativePath( $filename );
-		$info        = pathinfo( $filename );
-		$alternative = preg_replace( '/(.*)\-\d+x\d+$/', '$1', $info['filename'] );
+        return $file->set( 'post', reset( $posts ) )
+                    ->set( 'path', $relative_path );
+    }
 
-		return [
-			$filename,
-			$info['dirname'] . '/' . $alternative . '.' . $info['extension']
-		];
-	}
+    /**
+     * Create an array of normalized file paths from a filename that may
+     * include width and height dimensions.
+     *
+     * @param $filename
+     *
+     * @return array
+     */
+    public function normalizedFilePaths( $filename ) {
+        $filename    = $this->makeRelativePath( $filename );
+        $info        = pathinfo( $filename );
+        $alternative = preg_replace( '/(.*)\-\d+x\d+$/', '$1', $info['filename'] );
 
-	public static function fileDir( $path ) {
-		return pathinfo( $path )['dirname'];
-	}
+        return [
+            $filename,
+            $info['dirname'] . '/' . $alternative . '.' . $info['extension'],
+        ];
+    }
 
-	/**
-	 * Public entry point.  Do all the things to save a file as private or public.
-	 */
-	public function handle() {
-		return $this->move();
-	}
+    public static function fileDir( $path ) {
+        return pathinfo( $path )['dirname'];
+    }
 
-	/*
-    |--------------------------------------------------------------------------
-    | File
-    |--------------------------------------------------------------------------
-    */
+    /**
+     * Public entry point.  Do all the things to save a file as private or
+     * public.
+     */
+    public function handle() {
+        return $this->move();
+    }
 
-	public function move() {
-		$new_path = $this->postIsPrivate() && ! $this->pathIsPrivate()
-			? $this->privatePath()
-			: $this->publicPath();
+    /*
+      |--------------------------------------------------------------------------
+      | File
+      |--------------------------------------------------------------------------
+      */
 
-		$original_path = $this->postIsPrivate() && ! $this->pathIsPrivate()
-			? $this->publicPath()
-			: $this->privatePath();
+    public function move() {
+        $new_path = $this->postIsPrivate() && ! $this->pathIsPrivate() ? $this->privatePath() : $this->publicPath();
 
-		if ( ! is_dir( dirname( $new_path ) ) ) {
-			wp_mkdir_p( dirname( $new_path ) );
-		}
-		if ( is_dir( $new_path ) ) {
-			return false;
-		}
+        $original_path = $this->postIsPrivate() && ! $this->pathIsPrivate() ? $this->publicPath() : $this->privatePath();
 
-		rename( $original_path, $new_path );
+        if ( ! is_dir( dirname( $new_path ) ) ) {
+            wp_mkdir_p( dirname( $new_path ) );
+        }
+        if ( is_dir( $new_path ) ) {
+            return FALSE;
+        }
 
-		// Move all resized images for this file.
-		foreach ( $this->resizedFiles( $original_path ) as $file ) {
-			rename( $file, $this->swapFilePath( $file, $new_path ) );
-		}
-	}
+        rename( $original_path, $new_path );
 
-	/**
-	 * Stream the private file to the client and exit the script.
-	 */
-	public function transfer() {
-		if ( ! $this->userHasAccess() ) {
-			$this->forbid();
-		}
+        // Move all resized images for this file.
+        foreach ( $this->resizedFiles( $original_path ) as $file ) {
+            rename( $file, $this->swapFilePath( $file, $new_path ) );
+        }
+    }
 
-		if ( ! $this->exists() ) {
-			$this->abort();
-		}
+    /**
+     * Stream the private file to the client and exit the script.
+     */
+    public function transfer() {
+        if ( ! $this->userHasAccess() ) {
+            $this->forbid();
+        }
 
-		header( 'Content-Type: ' . $this->post->post_mime_type );
-		header( 'Content-Length: ' . filesize( $this->source() ) );
+        if ( ! $this->exists() ) {
+            $this->abort();
+        }
 
-		$file = fopen( $this->source(), 'rb' );
-		fpassthru( $file );
-		exit;
-	}
+        header( 'Content-Type: ' . $this->post->post_mime_type );
+        header( 'Content-Length: ' . filesize( $this->source() ) );
 
-	protected function forbid() {
-		header( 'HTTP/1.0 403 Forbidden' );
-		echo 'Access denied';
-		exit;
-	}
+        $file = fopen( $this->source(), 'rb' );
+        fpassthru( $file );
+        exit;
+    }
 
-	protected function abort() {
-		header( 'HTTP/1.0 404 Not Found' );
-		echo 'The requested resource could not be found';
-		exit;
-	}
+    protected function forbid() {
+        header( 'HTTP/1.0 403 Forbidden' );
+        echo 'Access denied';
+        exit;
+    }
 
-	/*
-    |--------------------------------------------------------------------------
-    | Access
-    |--------------------------------------------------------------------------
-    */
+    protected function abort() {
+        header( 'HTTP/1.0 404 Not Found' );
+        echo 'The requested resource could not be found';
+        exit;
+    }
 
-	protected function userHasAccess() {
+    /*
+      |--------------------------------------------------------------------------
+      | Access
+      |--------------------------------------------------------------------------
+      */
 
-		return current_user_can( 'view_private_files' );
-	}
+    protected function userHasAccess() {
 
-	protected function exists() {
-		return ! is_null( $this->path )
-		       && file_exists( $this->source() )
-		       && is_file( $this->source() );
-	}
+        return current_user_can( 'view_private_files' );
+    }
 
-	/*
-    |--------------------------------------------------------------------------
-    | Path
-    |--------------------------------------------------------------------------
-    */
+    protected function exists() {
+        return ! is_null( $this->path ) && file_exists( $this->source() ) && is_file( $this->source() );
+    }
 
-	protected function source() {
-		if ( $this->postIsPublic() ) {
-			return $this->publicPath();
-		}
+    /*
+      |--------------------------------------------------------------------------
+      | Path
+      |--------------------------------------------------------------------------
+      */
 
-		return $this->privatePath();
-	}
+    protected function source() {
+        if ( $this->postIsPublic() ) {
+            return $this->publicPath();
+        }
 
-	private function publicPath() {
-		return wp_upload_dir()['basedir'] . '/' . $this->path;
-	}
+        return $this->privatePath();
+    }
 
-	private function privatePath() {
-		return wp_upload_dir()['basedir'] . '/private/' . $this->path;
-	}
+    private function publicPath() {
+        return wp_upload_dir()['basedir'] . '/' . $this->path;
+    }
 
-	private function makeRelativePath( $url = null ) {
-		$url = $url ? : get_post_meta( $this->post->ID, '_wp_attached_file' )[0];
+    private function privatePath() {
+        return wp_upload_dir()['basedir'] . '/private/' . $this->path;
+    }
 
-		$attachment_url_parts = wp_parse_url( $url );
-		$attachment_path      = $attachment_url_parts['path'];
+    private function makeRelativePath( $url = NULL ) {
+        $url = $url ?: get_post_meta( $this->post->ID, '_wp_attached_file' )[0];
 
-		return preg_replace( '/^\/wp-content\/uploads\/(.*)/', '$1', $attachment_path );
-	}
+        $attachment_url_parts = wp_parse_url( $url );
+        $attachment_path      = $attachment_url_parts['path'];
 
-	/*
-    |--------------------------------------------------------------------------
-    | Privacy
-    |--------------------------------------------------------------------------
-    */
+        return preg_replace( '/^\/wp-content\/uploads\/(.*)/', '$1', $attachment_path );
+    }
 
-	public function postIsPrivate() {
-		if ( is_null( $this->post ) ) {
-			return false;
-		}
-		if ( 'attachment' !== get_post_type( $this->post->ID ) ) {
-			return false;
-		}
+    /*
+      |--------------------------------------------------------------------------
+      | Privacy
+      |--------------------------------------------------------------------------
+      */
 
-		if ( ! get_field( 'is_private', $this->post->ID ) ) {
-			return false;
-		}
+    public function postIsPrivate() {
+        if ( is_null( $this->post ) ) {
+            return FALSE;
+        }
+        if ( 'attachment' !== get_post_type( $this->post->ID ) ) {
+            return FALSE;
+        }
 
-		return true;
-	}
+        if ( ! get_field( 'is_private', $this->post->ID ) ) {
+            return FALSE;
+        }
 
-	public function pathIsPrivate() {
-		return file_exists( $this->privatePath() );
-	}
+        return TRUE;
+    }
 
-	public function postIsPublic() {
-		return ! $this->postIsPrivate();
-	}
+    public function pathIsPrivate() {
+        return file_exists( $this->privatePath() );
+    }
 
-	public function pathIsPublic() {
-		return ! $this->pathIsPrivate();
-	}
+    public function postIsPublic() {
+        return ! $this->postIsPrivate();
+    }
 
-	/*
-    |--------------------------------------------------------------------------
-    | URL
-    |--------------------------------------------------------------------------
-    */
+    public function pathIsPublic() {
+        return ! $this->pathIsPrivate();
+    }
 
-	public function url() {
-		return wp_upload_dir()['baseurl'] . '/' . $this->path;
-	}
+    /*
+      |--------------------------------------------------------------------------
+      | URL
+      |--------------------------------------------------------------------------
+      */
 
-	public function managedUrl() {
-		if ( $this->postIsPublic() ) {
-			return $this->url();
-		}
+    public function url() {
+        return wp_upload_dir()['baseurl'] . '/' . $this->path;
+    }
 
-		return home_url( '/' ) . 'managed/files/' . $this->path;
-	}
+    public function managedUrl() {
+        if ( $this->postIsPublic() ) {
+            return $this->url();
+        }
 
-	/*
-    |--------------------------------------------------------------------------
-    | Image meta
-    |--------------------------------------------------------------------------
-    */
+        return home_url( '/' ) . 'managed/files/' . $this->path;
+    }
 
-	private function resizedFiles( $path = null ) {
-		$path          = $path ? : $this->path;
-		$meta          = wp_get_attachment_metadata( $this->post->ID );
-		$cropped_paths = array_column( $meta['sizes'], 'file' );
+    /*
+      |--------------------------------------------------------------------------
+      | Image meta
+      |--------------------------------------------------------------------------
+      */
 
-		return array_map( function ( $filename ) use ( $path ) {
-			return static::fileDir( $path ) . '/' . $filename;
-		}, $cropped_paths );
-	}
+    private function resizedFiles( $path = NULL ) {
+        $path          = $path ?: $this->path;
+        $meta          = wp_get_attachment_metadata( $this->post->ID );
+        $cropped_paths = array_column( $meta['sizes'], 'file' );
 
-	private function swapFilePath( $existing, $moving_to ) {
-		$existing  = pathinfo( $existing );
-		$moving_to = pathinfo( $moving_to );
+        return array_map( function ( $filename ) use ( $path ) {
+            return static::fileDir( $path ) . '/' . $filename;
+        }, $cropped_paths );
+    }
 
-		return $moving_to['dirname'] . '/' . $existing['basename'];
-	}
+    private function swapFilePath( $existing, $moving_to ) {
+        $existing  = pathinfo( $existing );
+        $moving_to = pathinfo( $moving_to );
 
-	/*
-    |--------------------------------------------------------------------------
-    | Setters
-    |--------------------------------------------------------------------------
-    */
+        return $moving_to['dirname'] . '/' . $existing['basename'];
+    }
 
-	/**
-	 * @param $key
-	 * @param $value
-	 *
-	 * @return $this
-	 */
-	public function set( $key, $value ) {
-		$this->{$key} = $value;
+    /*
+      |--------------------------------------------------------------------------
+      | Setters
+      |--------------------------------------------------------------------------
+      */
 
-		return $this;
-	}
+    /**
+     * @param $key
+     * @param $value
+     *
+     * @return $this
+     */
+    public function set( $key, $value ) {
+        $this->{$key} = $value;
+
+        return $this;
+    }
 }
